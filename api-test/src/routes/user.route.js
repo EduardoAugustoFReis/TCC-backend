@@ -1,11 +1,17 @@
 import { Router } from "express";
-const userRouter = Router();
+import { upload } from "../config/multer.js"
 
+const userRouter = Router();
+import authMiddleware from "../middlewares/auth.js";
 import userController from "../controllers/UserController.js";
 
-userRouter.post("/", userController.createUser);
+userRouter.post("/", upload.single("avatar") ,userController.createUser);
+userRouter.get("/", userController.listAllUser);
+userRouter.put("/:id", authMiddleware, upload.single("avatar"), userController.updateUser);
+userRouter.delete("/:id",authMiddleware, userController.deleteUser);
 userRouter.get("/:id", userController.listUserWithId);
-userRouter.put("/:id", userController.updateUser);
-userRouter.delete("/:id", userController.deleteUser);
+
+// nova rota para listar barbeiros
+userRouter.get("/barbers", userController.listBarbers);
 
 export default userRouter;
