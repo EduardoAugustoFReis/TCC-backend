@@ -54,18 +54,25 @@ class UserController {
   };
 
   deleteUser = async (req, res, next) => {
-    const id = req.userId;
+    const { id } = req.params;
+    const jwtId = req.userId;
+
+    if(Number(id) !== Number(jwtId)){
+      return res.status(401).json("Permissão negada.");
+    }
 
     try {
-      const user = await User.findByPk(id);
+      const response = await User.destroy({
+        where: {
+          id: jwtId
+        }
+      });
 
-      if (!user) {
+      if (!response || response === 0) {
         return res
           .status(404)
           .json("Usuário não encontrado no banco de dados.");
       }
-
-      await user.destroy();
 
       return res.status(200).json("Usuário deletado com sucesso.");
     } catch (error) {
