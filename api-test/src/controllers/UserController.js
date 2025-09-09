@@ -3,7 +3,7 @@ const { User } = db;
 
 class UserController {
   createUser = async (req, res, next) => {
-    const { name, email, phone, password } = req.body;
+    const { name, email, phone, password, role } = req.body;
 
     try {
       const avatar = req.file ? `/uploads/${req.file.filename}` : null;
@@ -12,9 +12,10 @@ class UserController {
         email,
         phone,
         password,
+        role,
         avatar,
       });
-      const { id, role } = newUser;
+      const { id } = newUser;
 
       return res.status(201).json({ id, name, email, phone, role, avatar });
     } catch (error) {
