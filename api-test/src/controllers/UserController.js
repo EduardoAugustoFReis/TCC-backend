@@ -24,13 +24,27 @@ class UserController {
   };
 
   updateUser = async (req, res, next) => {
+    const { id } = req.params;
+    const jwtId = req.userId;
+
+    //verifica se o id obtido via jwt é o mesmo passado na rota, garantindo que um usuário não está tentando deletar outro
+    if(Number(id) !== Number(jwtId)){
+      return res.status(401).json("Permissão negada.");
+    }
+
+    //verifica se pelo menos uma informação foi enviada para ser atualizada
+    if(!(req.body.name || req.body.email || req.body.phone || req.body.role || req.body.password)){
+      return res.status(400).json("Insira alguma informação para ser atualizada.")
+    }
+    
     const { name, email, phone, role, password } = req.body;
-    const id = req.userId;
-
+    
     try {
-      const user = await User.findByPk(id);
+      const user = await User.findByPk(jwtId);
+      const avatar = req.file ? `/uploads/${req.file.filename}` : user.avatar;
 
-      if (!user) {
+      res.status(200).json({user, avatar});
+      /* if (!user) {
         return res
           .status(404)
           .json("Usuário não encontrado no banco de dados.");
@@ -47,16 +61,18 @@ class UserController {
         phone: user.phone,
         role: user.role,
         avatar: user.avatar,
-      });
+      }); */
     } catch (error) {
       return res.status(500).json("Erro interno de servidor.");
     }
   };
 
   deleteUser = async (req, res, next) => {
+    // função onde apenas um usuário pode deletar a si mesmo
     const { id } = req.params;
     const jwtId = req.userId;
 
+    //verifica se o id obtido via jwt é o mesmo passado na rota, garantindo que um usuário não está tentando deletar outro
     if(Number(id) !== Number(jwtId)){
       return res.status(401).json("Permissão negada.");
     }
