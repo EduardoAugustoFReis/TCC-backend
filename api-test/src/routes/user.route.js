@@ -7,11 +7,10 @@ import userController from "../controllers/UserController.js";
 
 userRouter.post("/", upload.single("avatar") ,userController.createUser);
 userRouter.get("/", userController.listAllUser);
+userRouter.get("/barbers", userController.listBarbers); //rota para listar somente os barbeiros
 userRouter.put("/:id", authMiddleware, upload.single("avatar"), userController.updateUser);
-userRouter.delete("/:id",authMiddleware, userController.deleteUser);
+userRouter.delete("/:id", userController.deleteUser);
 userRouter.get("/:id", userController.listUserWithId);
 
-// nova rota para listar barbeiros
-userRouter.get("/barbers", userController.listBarbers);
 
 export default userRouter;

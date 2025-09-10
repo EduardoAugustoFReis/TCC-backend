@@ -19,7 +19,7 @@ class LoginController {
       return res.status(401).json("Senha incorreta.");
     }
 
-    const { id, name, phone, role } = user;
+    const { id, name, phone, role, avatar } = user;
 
     return res.json({
       user: {
@@ -28,6 +28,7 @@ class LoginController {
         email,
         phone,
         role,
+        avatar,
       },
       token: jwt.sign({ id }, authConfig.secret, {
         expiresIn: authConfig.expiresIn,

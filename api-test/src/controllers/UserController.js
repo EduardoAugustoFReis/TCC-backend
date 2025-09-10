@@ -54,7 +54,7 @@ class UserController {
   };
 
   deleteUser = async (req, res, next) => {
-    const id = req.userId;
+    const { id } = req.params;
 
     try {
       const user = await User.findByPk(id);
@@ -91,6 +91,7 @@ class UserController {
         email: user.email,
         phone: user.phone,
         role: user.role,
+        avatar: user.avatar,
       });
     } catch (error) {
       return res.status(500).json("Erro interno de servidor.");
@@ -111,7 +112,7 @@ class UserController {
     try {
       const barbers = await User.findAll({
         where: { role: "barbeiro" },
-        attributes: ["id", "name", "email", "phone"],
+        attributes: ["id", "name", "email", "phone", "avatar"],
       });
 
       res.status(200).json(barbers);
