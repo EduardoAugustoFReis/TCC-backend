@@ -42,10 +42,10 @@ class UserController {
       // devolve só os dados seguros (sem senha)
       return res.status(200).json({
         id: user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
+        name: name ?? user.name,
+        email: email ?? user.email,
+        phone: phone ?? user.phone,
+        role: role ?? user.role,
         avatar: user.avatar,
       });
     } catch (error) {
