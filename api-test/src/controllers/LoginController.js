@@ -29,7 +29,7 @@ class LoginController {
         phone,
         role,
       },
-      token: jwt.sign({ id }, authConfig.secret, {
+      token: jwt.sign({ id, role }, authConfig.secret, {
         expiresIn: authConfig.expiresIn,
       }),
     });

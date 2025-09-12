@@ -68,6 +68,37 @@ class UserController {
   };
 
   deleteUser = async (req, res, next) => {
+    //função onde apenas um usuário administrador por deletar um usuário
+    const { id } = req.params;
+    const role = req.userRole;
+
+    //verifica se o usuário é um admin
+    if(role.toLowerCase() !== 'admin'){
+      return res
+        .status(403)
+        .json("Acesso negado.");
+    }
+
+    try {
+      const response = await User.destroy({
+        where: {
+          id: id
+        }
+      });
+
+      if (!response || response === 0) {
+        return res
+          .status(404)
+          .json("Usuário não encontrado no banco de dados.");
+      }
+
+      return res.status(200).json("Usuário deletado com sucesso.");
+    } catch (error) {
+      return res.status(500).json("Erro interno de servidor.");
+    }
+  };
+
+  deleteUserByHimself = async (req, res, next) => {
     // função onde apenas um usuário pode deletar a si mesmo
     const { id } = req.params;
     const jwtId = req.userId;
@@ -94,7 +125,7 @@ class UserController {
     } catch (error) {
       return res.status(500).json("Erro interno de servidor.");
     }
-  };
+  }
 
   listUserWithId = async (req, res, next) => {
     const { id } = req.params;

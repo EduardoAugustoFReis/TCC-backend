@@ -8,7 +8,10 @@ import userController from "../controllers/UserController.js";
 userRouter.post("/", upload.single("avatar") ,userController.createUser);
 userRouter.get("/", userController.listAllUser);
 userRouter.put("/:id", authMiddleware, upload.single("avatar"), userController.updateUser);
-userRouter.delete("/:id",authMiddleware, userController.deleteUser);
+//usuário deleta a si mesmo
+userRouter.delete("/deleteUser/:id", authMiddleware, userController.deleteUserByHimself);
+//um admin deleta um usuario
+userRouter.delete("/:id", authMiddleware, userController.deleteUser);
 userRouter.get("/:id", userController.listUserWithId);
 
 // nova rota para listar barbeiros
