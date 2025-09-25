@@ -9,7 +9,10 @@ userRouter.post("/", upload.single("avatar") ,userController.createUser);
 userRouter.get("/", userController.listAllUser);
 userRouter.get("/barbers", userController.listBarbers); //rota para listar somente os barbeiros
 userRouter.put("/", authMiddleware, upload.single("avatar"), userController.updateUser);
-userRouter.delete("/:id", userController.deleteUser);
+//usuário deleta a si mesmo
+userRouter.delete("/deleteUser/:id", authMiddleware, userController.deleteUserByHimself);
+//um admin deleta um usuario
+userRouter.delete("/:id", authMiddleware, userController.deleteUser);
 userRouter.get("/:id", userController.listUserWithId);
 
 

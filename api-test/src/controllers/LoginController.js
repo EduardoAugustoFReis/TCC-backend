@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import db from "../../models/index.js";
 import authConfig from "../config/authConfig.js";
+import redis from "../config/redis.js";
 const { User } = db;
 
 class LoginController {
@@ -30,11 +31,36 @@ class LoginController {
         role,
         avatar,
       },
-      token: jwt.sign({ id }, authConfig.secret, {
+      token: jwt.sign({ id, role }, authConfig.secret, {
         expiresIn: authConfig.expiresIn,
       }),
     });
   };
+
+  
+  logout = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      return res.status(401).json({error: "Token não existe."});
+    };
+
+    const [, token] = authHeader.split(" ");
+
+    try {
+      const decoded = jwt.verify(token, authConfig.secret);
+
+      // calcula quanto tempo falta pro token expirar
+      const ttl = decoded.exp - Math.floor(Date.now() / 1000);
+
+      // guarda token no redis com tempo de expiração
+      await redis.setex(`blacklist:${token}`, ttl, "true");
+
+      return res.json({ message: "Logout realizado com sucesso" });
+    } catch (error) {
+      return res.status(400).json({ error: "Token inválido" });
+    }
+  }
 }
 
 export default new LoginController();
