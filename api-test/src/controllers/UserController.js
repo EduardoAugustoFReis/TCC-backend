@@ -59,17 +59,15 @@ class UserController {
     const role = req.userRole;
 
     //verifica se o usuário é um admin
-    if(role.toLowerCase() !== 'admin'){
-      return res
-        .status(403)
-        .json("Acesso negado.");
+    if (role.toLowerCase() !== "admin") {
+      return res.status(403).json("Acesso negado.");
     }
 
     try {
       const response = await User.destroy({
         where: {
-          id: id
-        }
+          id: id,
+        },
       });
 
       if (!response || response === 0) {
@@ -90,15 +88,15 @@ class UserController {
     const jwtId = req.userId;
 
     //verifica se o id obtido via jwt é o mesmo passado na rota, garantindo que um usuário não está tentando deletar outro
-    if(Number(id) !== Number(jwtId)){
+    if (Number(id) !== Number(jwtId)) {
       return res.status(401).json("Permissão negada.");
     }
 
     try {
       const response = await User.destroy({
         where: {
-          id: jwtId
-        }
+          id: jwtId,
+        },
       });
 
       if (!response || response === 0) {
@@ -111,7 +109,7 @@ class UserController {
     } catch (error) {
       return res.status(500).json("Erro interno de servidor.");
     }
-  }
+  };
 
   listUserWithId = async (req, res, next) => {
     const { id } = req.params;
