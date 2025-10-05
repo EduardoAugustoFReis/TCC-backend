@@ -12,7 +12,10 @@ export default (sequelize) => {
     {
       name: DataTypes.STRING,
       price: DataTypes.DECIMAL,
-      duration: DataTypes.STRING,
+      duration: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
       userId: DataTypes.INTEGER,
     },
     {
