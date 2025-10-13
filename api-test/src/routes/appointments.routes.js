@@ -18,5 +18,7 @@ appointmentRouter.patch(
   authMiddleware,
   AppointmentController.changeStatus
 );
+// Nova rota para listar horários disponíveis
+appointmentRouter.get("/barbers/:barberId/available", AppointmentController.listAvailableTimes);
 
 export default appointmentRouter;
