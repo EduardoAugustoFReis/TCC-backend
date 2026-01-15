@@ -387,8 +387,16 @@ class AppointmentController {
             const slotStartTime = new Date(openingTime.getTime() + windowStart * slotMs);
             const slotEndTime = new Date(slotStartTime.getTime() + serviceDurationMs);
 
+            // Horário de almoço
+            const lunchStartTime = new Date(`${date}T12:00:00`);
+            const lunchEndTime = new Date(`${date}T13:00:00`);
+
+            const isLunchTime =
+              slotStartTime < lunchEndTime &&
+              slotEndTime > lunchStartTime;
+
             // Opcional: checar se slotEndTime + tolerance cabe antes do fechamento (ou já garantido)
-            if (slotEndTime.getTime() <= closingTime.getTime()) {
+            if (slotEndTime.getTime() <= closingTime.getTime() && !isLunchTime ) {
               availableSlots.push({
                 start: slotStartTime.toISOString(),
                 end: slotEndTime.toISOString(),
