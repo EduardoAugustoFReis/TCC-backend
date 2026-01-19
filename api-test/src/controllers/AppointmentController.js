@@ -309,6 +309,15 @@ class AppointmentController {
           .json({ message: "Informe a data (date) e o serviço (serviceId)." });
       }
 
+      // Verifica dia da semana (0 = domingo)
+      const selectedDate = new Date(`${date}T00:00:00`);
+      const dayOfWeek = selectedDate.getDay();
+
+      // Domingo não funciona
+      if (dayOfWeek === 0) {
+        return res.status(200).json({ availableSlots: [] });
+      }
+
       const barber = await User.findByPk(barberId);
       if (!barber || barber.role !== "barbeiro") {
         return res.status(404).json({ message: "Barbeiro não encontrado." });
@@ -319,108 +328,65 @@ class AppointmentController {
         return res.status(404).json({ message: "Serviço não encontrado." });
       }
 
-      const serviceDurationMs = service.duration * 60 * 1000; // minutos -> ms
-      const toleranceMs = 15 * 60 * 1000; // tolerância (15 min)
-      const slotMinutes = 15; // granularidade dos slots (minutos) - ajustar conforme desejar
-      const slotMs = slotMinutes * 60 * 1000;
+      const serviceDuration = service.duration * 60000; // minutos → ms
+      const tolerance = 15 * 60000; // 15 min
 
-      // Construir opening/closing em UTC (date no formato YYYY-MM-DD)
-      const year = Number(date.slice(0, 4));
-      const month = Number(date.slice(5, 7)) - 1;
-      const day = Number(date.slice(8, 10));
-
-      const openingTime = new Date(Date.UTC(year, month, day, 8, 0, 0)); // 08:00 UTC
-      const closingTime = new Date(Date.UTC(year, month, day, 18, 0, 0)); // 18:00 UTC
-
-      // Buscar compromissos que se sobrepõem ao período de funcionamento (mais abrangente)
+      // Buscar compromissos do barbeiro no dia (UTC)
       const appointments = await Appointment.findAll({
         where: {
           barberId,
+          startTime: {
+            [Op.between]: [
+              new Date(`${date}T00:00:00Z`),
+              new Date(`${date}T23:59:59Z`),
+            ],
+          },
           status: { [Op.not]: "canceled" },
-          [Op.and]: [
-            { startTime: { [Op.lt]: closingTime } },
-            { endTime: { [Op.gt]: openingTime } },
-          ],
         },
       });
 
-      // Número de slots no dia
-      const totalSlots = Math.ceil((closingTime - openingTime) / slotMs);
+      // Horário de funcionamento (UTC)
+      const openingTime = new Date(`${date}T08:00:00`);
+      const closingTime = new Date(`${date}T18:00:00`);
 
-      // Array que marca ocupação: false = livre, true = ocupado
-      const occupied = new Array(totalSlots).fill(false);
-
-      // Marca todos os slots que qualquer compromisso ocupa
-      appointments.forEach((appt) => {
-        const apptStart = new Date(appt.startTime);
-        const apptEnd = new Date(appt.endTime);
-
-        // expandir com tolerância: considerar desde (start - toleranceBefore) até (end + toleranceAfter)
-        // aqui uso tolerância somente após o compromisso (como no seu exemplo),
-        // mas você pode aplicar antes também se desejar:
-        const markStart = Math.max(apptStart.getTime() - toleranceMs, openingTime.getTime());
-        const markEnd = Math.min(apptEnd.getTime() + toleranceMs, closingTime.getTime());
-
-        // índices dos slots a marcar
-        const startIndex = Math.floor((markStart - openingTime.getTime()) / slotMs);
-        const endIndexExclusive = Math.ceil((markEnd - openingTime.getTime()) / slotMs);
-
-        for (let i = Math.max(0, startIndex); i < Math.min(totalSlots, endIndexExclusive); i++) {
-          occupied[i] = true;
-        }
-      });
-
-      // Quantos slots consecutivos são necessários para o serviço pedido
-      const neededSlots = Math.ceil(serviceDurationMs / slotMs);
-
-      // Procura sequência de slots livres de tamanho neededSlots
       const availableSlots = [];
-      let consecutive = 0;
-      let windowStart = 0;
+      let currentTime = new Date(openingTime);
 
-      for (let i = 0; i < totalSlots; i++) {
-        if (!occupied[i]) {
-          if (consecutive === 0) windowStart = i;
-          consecutive++;
-          if (consecutive >= neededSlots) {
-            // encontramos um intervalo livre de tamanho suficiente: converte para horários
-            const slotStartTime = new Date(openingTime.getTime() + windowStart * slotMs);
-            const slotEndTime = new Date(slotStartTime.getTime() + serviceDurationMs);
+      while (
+        currentTime.getTime() + serviceDuration + tolerance <=
+        closingTime.getTime()
+      ) {
+        const slotEnd = new Date(currentTime.getTime() + serviceDuration);
 
-            // Horário de almoço
-            const lunchStartTime = new Date(`${date}T12:00:00`);
-            const lunchEndTime = new Date(`${date}T13:00:00`);
+        const isConflict = appointments.some((appt) => {
+          const apptStart = new Date(appt.startTime);
+          const apptEnd = new Date(appt.endTime);
 
-            const isLunchTime =
-              slotStartTime < lunchEndTime &&
-              slotEndTime > lunchStartTime;
+          return (
+            currentTime < new Date(apptEnd.getTime() + tolerance) &&
+            slotEnd > apptStart
+          );
+        });
 
-            // Opcional: checar se slotEndTime + tolerance cabe antes do fechamento (ou já garantido)
-            if (slotEndTime.getTime() <= closingTime.getTime() && !isLunchTime ) {
-              availableSlots.push({
-                start: slotStartTime.toISOString(),
-                end: slotEndTime.toISOString(),
-              });
-            }
-
-            // avançar janela: se quiser apenas o primeiro disponível, pode break aqui.
-            // para listar todos, avançamos uma posição e recomeçamos contagem (sliding window)
-            // aqui, vamos mover windowStart + 1 para procurar próximos encaixes
-            i = windowStart + 0; // mantemos i; em seguida, vamos incrementar i no loop
-            // reduzir consecutive para consecutive - 1 e avançar windowStart em 1
-            consecutive = consecutive - 1;
-            windowStart = windowStart + 1;
-          }
-        } else {
-          consecutive = 0;
+        if (!isConflict) {
+          // sem ajuste de fuso
+          availableSlots.push({
+            start: currentTime.toISOString(),
+            end: slotEnd.toISOString(),
+          });
         }
+
+        currentTime = new Date(
+          currentTime.getTime() + serviceDuration + tolerance
+        );
       }
 
-      // Retorna todos os horários possíveis (ou apenas o primeiro, se preferir)
       return res.status(200).json({ availableSlots });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erro interno no servidor", error });
+      return res
+        .status(500)
+        .json({ message: "Erro interno no servidor", error });
     }
   };
 
