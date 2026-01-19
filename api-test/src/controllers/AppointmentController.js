@@ -226,11 +226,11 @@ class AppointmentController {
             message: "Você não pode cancelar o compromisso de outro cliente.",
           });
         }
-        if (appointment.status === "confirmed") {
+        /* if (appointment.status === "confirmed") {
           return res.status(400).json({
             message: "Um compromisso confirmado não pode ser deletado.",
           });
-        }
+        } */
       }
 
       // Se for "cliente", só pode cancelar compromissos dele e ainda pendentes
