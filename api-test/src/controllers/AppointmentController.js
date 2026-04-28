@@ -2,6 +2,20 @@ import { Op, where } from "sequelize";
 import db from "../../models/index.js";
 const { Appointment, Service, User } = db;
 
+const LUNCH_START_HOUR = 12;
+const LUNCH_END_HOUR = 13;
+
+function getLunchInterval(dateString) {
+  return {
+    lunchStart: new Date(`${dateString}T12:00:00`),
+    lunchEnd: new Date(`${dateString}T13:00:00`)
+  };
+}
+
+function overlaps(startA, endA, startB, endB) {
+  return startA < endB && endA > startB;
+}
+
 class AppointmentController {
   create = async (req, res) => {
     try {
@@ -43,6 +57,20 @@ class AppointmentController {
 
       // tempo que começa mais a duração.
       const end = new Date(start.getTime() + service.duration * 60000);
+
+      const year = start.getFullYear();
+      const month = String(start.getMonth()+1).padStart(2,"0");
+      const day = String(start.getDate()).padStart(2,"0");
+
+      const dateOnly = `${year}-${month}-${day}`;
+
+      const { lunchStart, lunchEnd } = getLunchInterval(dateOnly);
+
+      if (overlaps(start, end, lunchStart, lunchEnd)) {
+        return res.status(400).json({
+          message: "Horário indisponível: intervalo de almoço do barbeiro."
+        });
+      }
 
       // checa conflito: existe algum agendamento que comece antes do nosso fim
       // e termine depois do nosso começo? então tem sobreposição.
@@ -329,8 +357,8 @@ class AppointmentController {
       const month = Number(date.slice(5, 7)) - 1;
       const day = Number(date.slice(8, 10));
 
-      const openingTime = new Date(Date.UTC(year, month, day, 8, 0, 0)); // 08:00 UTC
-      const closingTime = new Date(Date.UTC(year, month, day, 18, 0, 0)); // 18:00 UTC
+      const openingTime = new Date(year, month, day, 8, 0, 0);
+      const closingTime = new Date(year, month, day, 18, 0, 0);
 
       // Buscar compromissos que se sobrepõem ao período de funcionamento (mais abrangente)
       const appointments = await Appointment.findAll({
@@ -388,12 +416,15 @@ class AppointmentController {
             const slotEndTime = new Date(slotStartTime.getTime() + serviceDurationMs);
 
             // Horário de almoço
-            const lunchStartTime = new Date(`${date}T12:00:00`);
-            const lunchEndTime = new Date(`${date}T13:00:00`);
+            const { lunchStart, lunchEnd } =
+              getLunchInterval(date);
 
-            const isLunchTime =
-              slotStartTime < lunchEndTime &&
-              slotEndTime > lunchStartTime;
+            const isLunchTime = overlaps(
+              slotStartTime,
+              slotEndTime,
+              lunchStart,
+              lunchEnd
+            );
 
             // Opcional: checar se slotEndTime + tolerance cabe antes do fechamento (ou já garantido)
             if (slotEndTime.getTime() <= closingTime.getTime() && !isLunchTime ) {
