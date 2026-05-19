@@ -259,6 +259,11 @@ class AppointmentController {
             message: "Um compromisso confirmado não pode ser deletado.",
           });
         }
+        if (appointment.status !== "pending") {
+          return res.status(400).json({
+            message: "Só é possível deletar um compromisso com status de pendente.",
+          });
+        }
       }
 
       // Se for "cliente", só pode cancelar compromissos dele e ainda pendentes
