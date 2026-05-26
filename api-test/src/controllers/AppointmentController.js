@@ -2,6 +2,20 @@ import { Op, where } from "sequelize";
 import db from "../../models/index.js";
 const { Appointment, Service, User } = db;
 
+const LUNCH_START_HOUR = 12;
+const LUNCH_END_HOUR = 13;
+
+function getLunchInterval(dateString) {
+  return {
+    lunchStart: new Date(`${dateString}T12:00:00`),
+    lunchEnd: new Date(`${dateString}T13:00:00`)
+  };
+}
+
+function overlaps(startA, endA, startB, endB) {
+  return startA < endB && endA > startB;
+}
+
 class AppointmentController {
   create = async (req, res) => {
     try {
@@ -43,6 +57,20 @@ class AppointmentController {
 
       // tempo que começa mais a duração.
       const end = new Date(start.getTime() + service.duration * 60000);
+
+      const year = start.getFullYear();
+      const month = String(start.getMonth()+1).padStart(2,"0");
+      const day = String(start.getDate()).padStart(2,"0");
+
+      const dateOnly = `${year}-${month}-${day}`;
+
+      const { lunchStart, lunchEnd } = getLunchInterval(dateOnly);
+
+      if (overlaps(start, end, lunchStart, lunchEnd)) {
+        return res.status(400).json({
+          message: "Horário indisponível: intervalo de almoço do barbeiro."
+        });
+      }
 
       // checa conflito: existe algum agendamento que comece antes do nosso fim
       // e termine depois do nosso começo? então tem sobreposição.
@@ -226,11 +254,16 @@ class AppointmentController {
             message: "Você não pode cancelar o compromisso de outro cliente.",
           });
         }
-        /* if (appointment.status === "confirmed") {
+        if (appointment.status === "confirmed") {
           return res.status(400).json({
             message: "Um compromisso confirmado não pode ser deletado.",
           });
-        } */
+        }
+        if (appointment.status !== "pending") {
+          return res.status(400).json({
+            message: "Só é possível deletar um compromisso com status de pendente.",
+          });
+        }
       }
 
       // Se for "cliente", só pode cancelar compromissos dele e ainda pendentes
@@ -309,15 +342,6 @@ class AppointmentController {
           .json({ message: "Informe a data (date) e o serviço (serviceId)." });
       }
 
-      // Verifica dia da semana (0 = domingo)
-      const selectedDate = new Date(`${date}T00:00:00`);
-      const dayOfWeek = selectedDate.getDay();
-
-      // Domingo não funciona
-      if (dayOfWeek === 0) {
-        return res.status(200).json({ availableSlots: [] });
-      }
-
       const barber = await User.findByPk(barberId);
       if (!barber || barber.role !== "barbeiro") {
         return res.status(404).json({ message: "Barbeiro não encontrado." });
@@ -328,65 +352,111 @@ class AppointmentController {
         return res.status(404).json({ message: "Serviço não encontrado." });
       }
 
-      const serviceDuration = service.duration * 60000; // minutos → ms
-      const tolerance = 15 * 60000; // 15 min
+      const serviceDurationMs = service.duration * 60 * 1000; // minutos -> ms
+      const toleranceMs = 15 * 60 * 1000; // tolerância (15 min)
+      const slotMinutes = 15; // granularidade dos slots (minutos) - ajustar conforme desejar
+      const slotMs = slotMinutes * 60 * 1000;
 
-      // Buscar compromissos do barbeiro no dia (UTC)
+      // Construir opening/closing em UTC (date no formato YYYY-MM-DD)
+      const year = Number(date.slice(0, 4));
+      const month = Number(date.slice(5, 7)) - 1;
+      const day = Number(date.slice(8, 10));
+
+      const openingTime = new Date(year, month, day, 8, 0, 0);
+      const closingTime = new Date(year, month, day, 18, 0, 0);
+
+      // Buscar compromissos que se sobrepõem ao período de funcionamento (mais abrangente)
       const appointments = await Appointment.findAll({
         where: {
           barberId,
-          startTime: {
-            [Op.between]: [
-              new Date(`${date}T00:00:00Z`),
-              new Date(`${date}T23:59:59Z`),
-            ],
-          },
           status: { [Op.not]: "canceled" },
+          [Op.and]: [
+            { startTime: { [Op.lt]: closingTime } },
+            { endTime: { [Op.gt]: openingTime } },
+          ],
         },
       });
 
-      // Horário de funcionamento (UTC)
-      const openingTime = new Date(`${date}T08:00:00`);
-      const closingTime = new Date(`${date}T18:00:00`);
+      // Número de slots no dia
+      const totalSlots = Math.ceil((closingTime - openingTime) / slotMs);
 
-      const availableSlots = [];
-      let currentTime = new Date(openingTime);
+      // Array que marca ocupação: false = livre, true = ocupado
+      const occupied = new Array(totalSlots).fill(false);
 
-      while (
-        currentTime.getTime() + serviceDuration + tolerance <=
-        closingTime.getTime()
-      ) {
-        const slotEnd = new Date(currentTime.getTime() + serviceDuration);
+      // Marca todos os slots que qualquer compromisso ocupa
+      appointments.forEach((appt) => {
+        const apptStart = new Date(appt.startTime);
+        const apptEnd = new Date(appt.endTime);
 
-        const isConflict = appointments.some((appt) => {
-          const apptStart = new Date(appt.startTime);
-          const apptEnd = new Date(appt.endTime);
+        // expandir com tolerância: considerar desde (start - toleranceBefore) até (end + toleranceAfter)
+        // aqui uso tolerância somente após o compromisso (como no seu exemplo),
+        // mas você pode aplicar antes também se desejar:
+        const markStart = Math.max(apptStart.getTime() - toleranceMs, openingTime.getTime());
+        const markEnd = Math.min(apptEnd.getTime() + toleranceMs, closingTime.getTime());
 
-          return (
-            currentTime < new Date(apptEnd.getTime() + tolerance) &&
-            slotEnd > apptStart
-          );
-        });
+        // índices dos slots a marcar
+        const startIndex = Math.floor((markStart - openingTime.getTime()) / slotMs);
+        const endIndexExclusive = Math.ceil((markEnd - openingTime.getTime()) / slotMs);
 
-        if (!isConflict) {
-          // sem ajuste de fuso
-          availableSlots.push({
-            start: currentTime.toISOString(),
-            end: slotEnd.toISOString(),
-          });
+        for (let i = Math.max(0, startIndex); i < Math.min(totalSlots, endIndexExclusive); i++) {
+          occupied[i] = true;
         }
+      });
 
-        currentTime = new Date(
-          currentTime.getTime() + serviceDuration + tolerance
-        );
+      // Quantos slots consecutivos são necessários para o serviço pedido
+      const neededSlots = Math.ceil(serviceDurationMs / slotMs);
+
+      // Procura sequência de slots livres de tamanho neededSlots
+      const availableSlots = [];
+      let consecutive = 0;
+      let windowStart = 0;
+
+      for (let i = 0; i < totalSlots; i++) {
+        if (!occupied[i]) {
+          if (consecutive === 0) windowStart = i;
+          consecutive++;
+          if (consecutive >= neededSlots) {
+            // encontramos um intervalo livre de tamanho suficiente: converte para horários
+            const slotStartTime = new Date(openingTime.getTime() + windowStart * slotMs);
+            const slotEndTime = new Date(slotStartTime.getTime() + serviceDurationMs);
+
+            // Horário de almoço
+            const { lunchStart, lunchEnd } =
+              getLunchInterval(date);
+
+            const isLunchTime = overlaps(
+              slotStartTime,
+              slotEndTime,
+              lunchStart,
+              lunchEnd
+            );
+
+            // Opcional: checar se slotEndTime + tolerance cabe antes do fechamento (ou já garantido)
+            if (slotEndTime.getTime() <= closingTime.getTime() && !isLunchTime ) {
+              availableSlots.push({
+                start: slotStartTime.toISOString(),
+                end: slotEndTime.toISOString(),
+              });
+            }
+
+            // avançar janela: se quiser apenas o primeiro disponível, pode break aqui.
+            // para listar todos, avançamos uma posição e recomeçamos contagem (sliding window)
+            // aqui, vamos mover windowStart + 1 para procurar próximos encaixes
+            i = windowStart + 0; // mantemos i; em seguida, vamos incrementar i no loop
+            // reduzir consecutive para consecutive - 1 e avançar windowStart em 1
+            consecutive = consecutive - 1;
+            windowStart = windowStart + 1;
+          }
+        } else {
+          consecutive = 0;
+        }
       }
 
+      // Retorna todos os horários possíveis (ou apenas o primeiro, se preferir)
       return res.status(200).json({ availableSlots });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
-        .json({ message: "Erro interno no servidor", error });
+      return res.status(500).json({ message: "Erro interno no servidor", error });
     }
   };
 
