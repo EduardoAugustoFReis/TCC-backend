@@ -364,9 +364,6 @@ class AppointmentController {
       const serviceDuration = service.duration * 60000; // minutos → ms
       const tolerance = 15 * 60000; // 15 min
 
-<<<<<<< HEAD
-      // Buscar compromissos do barbeiro no dia (UTC)
-=======
       // Construir opening/closing em UTC (date no formato YYYY-MM-DD)
       const year = Number(date.slice(0, 4));
       const month = Number(date.slice(5, 7)) - 1;
@@ -376,7 +373,6 @@ class AppointmentController {
       const closingTime = new Date(year, month, day, 18, 0, 0);
 
       // Buscar compromissos que se sobrepõem ao período de funcionamento (mais abrangente)
->>>>>>> develop_lucas
       const appointments = await Appointment.findAll({
         where: {
           barberId,
@@ -403,17 +399,6 @@ class AppointmentController {
       ) {
         const slotEnd = new Date(currentTime.getTime() + serviceDuration);
 
-<<<<<<< HEAD
-        const isConflict = appointments.some((appt) => {
-          const apptStart = new Date(appt.startTime);
-          const apptEnd = new Date(appt.endTime);
-
-          return (
-            currentTime < new Date(apptEnd.getTime() + tolerance) &&
-            slotEnd > apptStart
-          );
-        });
-=======
             // Horário de almoço
             const { lunchStart, lunchEnd } =
               getLunchInterval(date);
@@ -424,7 +409,6 @@ class AppointmentController {
               lunchStart,
               lunchEnd
             );
->>>>>>> develop_lucas
 
         if (!isConflict) {
           // sem ajuste de fuso
